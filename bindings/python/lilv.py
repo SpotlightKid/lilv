@@ -38,10 +38,10 @@ c = _LilvLib()
 
 def _as_uri(obj):
     """Utility function for converting some object into a URI node"""
-    if type(obj) in [Plugin, PluginClass, UI]:
+    if isinstance(obj, (Plugin, PluginClass, UI)):
         return obj.get_uri()
     else:
-        assert type(obj) == Node
+        assert isinstance(obj, Node)
         assert obj.node
         return Node(obj.world, c.node_duplicate(obj.node))
 
@@ -121,7 +121,7 @@ class Plugin(Structure):
 
     def __init__(self, world, plugin):
         assert isinstance(world, World)
-        assert type(plugin) == POINTER(Plugin)
+        assert isinstance(plugin, POINTER(Plugin))
         assert plugin
 
         self.world = world
@@ -320,14 +320,14 @@ class Plugin(Structure):
 
     def get_port(self, key):
         """Get a port on `plugin` by index or symbol."""
-        if type(key) == int:
+        if isinstance(key, int):
             return self.get_port_by_index(key)
         else:
             return self.get_port_by_symbol(key)
 
     def get_port_by_index(self, index):
         """Get a port on `plugin` by `index`."""
-        assert type(index) == int
+        assert isinstance(index, int)
         return Port.wrap(self, c.plugin_get_port_by_index(self.plugin, index))
 
     def get_port_by_symbol(self, symbol):
@@ -336,8 +336,9 @@ class Plugin(Structure):
         Note this function is slower than get_port_by_index(),
         especially on plugins with a very large number of ports.
         """
-        assert type(symbol) == str or isinstance(symbol, Node)
-        if type(symbol) == str:
+        assert isinstance(symbol, (str, Node))
+
+        if isinstance(symbol, str):
             symbol = self.world.new_string(symbol)
 
         assert isinstance(symbol, Node)
@@ -429,7 +430,7 @@ class PluginClass(Structure):
 
     def __init__(self, world, plugin_class):
         assert isinstance(world, World)
-        assert type(plugin_class) == POINTER(PluginClass)
+        assert isinstance(plugin_class, POINTER(PluginClass))
         assert plugin_class
 
         self.world = world
@@ -481,7 +482,7 @@ class Port(Structure):
 
     def __init__(self, plugin, port):
         assert isinstance(plugin, Plugin)
-        assert type(port) == POINTER(Port)
+        assert isinstance(port, POINTER(Port))
         assert port
 
         self.plugin = plugin
@@ -638,7 +639,7 @@ class ScalePoint(Structure):
 
     def __init__(self, world, point):
         assert isinstance(world, World)
-        assert type(point) == POINTER(ScalePoint)
+        assert isinstance(point, POINTER(ScalePoint))
         assert point
 
         self.label = Node.wrap(
@@ -662,7 +663,7 @@ class UI(Structure):
 
     def __init__(self, world, ui):
         assert isinstance(world, World)
-        assert type(ui) == POINTER(UI)
+        assert isinstance(ui, POINTER(UI))
         assert ui
         self.world = world
         self.ui = ui
@@ -671,7 +672,7 @@ class UI(Structure):
         return str(self.get_uri())
 
     def __eq__(self, other):
-        if type(other) == str or type(other) == Node:
+        if isinstance(other, (str, Node)):
             return self.get_uri() == other
 
         return self.get_uri() == other.get_uri()
@@ -722,14 +723,14 @@ class Node(Structure):
     @classmethod
     def wrap(cls, world, node):
         assert isinstance(world, World)
-        assert (node is None) or (type(node) == POINTER(Node))
+        assert node is None or isinstance(node, POINTER(Node))
         if node:
             return Node(world, node)
 
         return None
 
     def __init__(self, world, node):
-        assert type(node) == POINTER(Node)
+        assert isinstance(node, POINTER(Node))
         assert node
         self.world = world
         self.node = node
@@ -748,11 +749,10 @@ class Node(Structure):
         if other is None:
             return False
 
-        otype = type(other)
-        if otype == Node:
+        if isinstance(other, Node):
             return c.node_equals(self.node, other.node)
 
-        return otype(self) == other
+        return type(other)(self) == other
 
     def __ne__(self, other):
         return not c.node_equals(self.node, other.node)
@@ -928,7 +928,7 @@ class Plugins(Collection):
     """Collection of plugins."""
 
     def __init__(self, world, collection):
-        assert type(collection) == POINTER(Plugins)
+        assert isinstance(collection, POINTER(Plugins))
         assert collection
 
         def constructor(world, plugin):
@@ -952,7 +952,7 @@ class Plugins(Collection):
         return c.plugins_size(self.collection)
 
     def __getitem__(self, key):
-        if type(key) == int:
+        if isinstance(key, int):
             return super(Plugins, self).__getitem__(key)
 
         plugin = self.get_by_uri(key)
@@ -974,7 +974,7 @@ class PluginClasses(Collection):
     """Collection of plugin classes."""
 
     def __init__(self, world, collection, owning=False):
-        assert type(collection) == POINTER(PluginClasses)
+        assert isinstance(collection, POINTER(PluginClasses))
         assert collection
 
         self.owning = owning
@@ -999,7 +999,7 @@ class PluginClasses(Collection):
         return c.plugin_classes_size(self.collection)
 
     def __getitem__(self, key):
-        if type(key) == int:
+        if isinstance(key, int):
             return super(PluginClasses, self).__getitem__(key)
 
         klass = self.get_by_uri(key)
@@ -1026,7 +1026,7 @@ class UIs(Collection):
     """Collection of plugin UIs."""
 
     def __init__(self, world, collection):
-        assert type(collection) == POINTER(UIs)
+        assert isinstance(collection, POINTER(UIs))
         assert collection
         super(UIs, self).__init__(
             world,
@@ -1049,7 +1049,7 @@ class UIs(Collection):
         return c.uis_size(self.collection)
 
     def __getitem__(self, key):
-        if type(key) == int:
+        if isinstance(key, int):
             return super(UIs, self).__getitem__(key)
 
         ui = self.get_by_uri(key)
@@ -1076,7 +1076,7 @@ class Nodes(Collection):
         return Node.wrap(world, c.node_duplicate(node))
 
     def __init__(self, world, collection, owning=False):
-        assert type(collection) == POINTER(Nodes)
+        assert isinstance(collection, POINTER(Nodes))
 
         self.owning = owning
         super(Nodes, self).__init__(
@@ -1119,7 +1119,7 @@ class Namespace:
 
     def __init__(self, world, prefix):
         assert isinstance(world, World)
-        assert type(prefix) == str
+        assert isinstance(prefix, str)
 
         self.world = world
         self.prefix = prefix
@@ -1433,7 +1433,7 @@ class Instance(Structure):
             self.get_descriptor().connect_port(
                 self.get_handle(), port_index, data
             )
-        elif type(data) == numpy.ndarray:
+        elif isinstance(data, numpy.ndarray):
             self.get_descriptor().connect_port(
                 self.get_handle(),
                 port_index,
