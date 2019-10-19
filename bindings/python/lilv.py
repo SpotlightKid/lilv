@@ -958,6 +958,10 @@ class Plugins(Collection):
         if isinstance(key, int):
             return super(Plugins, self).__getitem__(key)
 
+        if not isinstance(key, Node):
+            raise TypeError(
+                "Key must be of type int or Node, not '%s'." % type(key))
+
         plugin = self.get_by_uri(key)
         if plugin is None:
             raise KeyError("Plugin not found: " + str(key))
@@ -1004,6 +1008,10 @@ class PluginClasses(Collection):
     def __getitem__(self, key):
         if isinstance(key, int):
             return super(PluginClasses, self).__getitem__(key)
+
+        if not isinstance(key, Node):
+            raise TypeError(
+                "Key must be of type int or Node, not '%s'." % type(key))
 
         klass = self.get_by_uri(key)
         if klass is None:
