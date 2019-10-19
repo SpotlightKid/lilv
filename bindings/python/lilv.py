@@ -949,7 +949,7 @@ class Plugins(Collection):
         self.world = world
 
     def __contains__(self, key):
-        return bool(self.get_by_uri(_as_uri(key)))
+        return self.get_by_uri(_as_uri(key)) is not None
 
     def __len__(self):
         return c.plugins_size(self.collection)
@@ -996,7 +996,7 @@ class PluginClasses(Collection):
             c.plugin_classes_free(self.collection)
 
     def __contains__(self, key):
-        return bool(self.get_by_uri(_as_uri(key)))
+        return self.get_by_uri(_as_uri(key)) is not None
 
     def __len__(self):
         return c.plugin_classes_size(self.collection)
@@ -1046,7 +1046,7 @@ class UIs(Collection):
             c.uis_free(self.collection)
 
     def __contains__(self, uri):
-        return bool(self.get_by_uri(_as_uri(uri)))
+        return self.get_by_uri(_as_uri(uri)) is not None
 
     def __len__(self):
         return c.uis_size(self.collection)
