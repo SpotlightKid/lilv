@@ -903,6 +903,9 @@ class Collection(Structure):
         )
 
     def __getitem__(self, index):
+        if index < 0:
+            raise IndexError
+
         pos = 0
         it = self.iter_begin(self.collection)
 
