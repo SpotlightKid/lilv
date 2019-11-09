@@ -48,15 +48,15 @@ def _as_uri(obj):
 
 # LV2 types
 
-LV2_Handle = POINTER(None)
-LV2_URID_Map_Handle = POINTER(None)
-LV2_URID_Unmap_Handle = POINTER(None)
+LV2_Handle = c_void_p
+LV2_URID_Map_Handle = c_void_p
+LV2_URID_Unmap_Handle = c_void_p
 LV2_URID = c_uint32
 
 
 class LV2_Feature(Structure):
     __slots__ = ["URI", "data"]
-    _fields_ = [("URI", c_char_p), ("data", POINTER(None))]
+    _fields_ = [("URI", c_char_p), ("data", c_void_p)]
 
 
 class LV2_Descriptor(Structure):
@@ -84,7 +84,7 @@ LV2_Descriptor._fields_ = [
             POINTER(POINTER(LV2_Feature)),
         ),
     ),
-    ("connect_port", CFUNCTYPE(None, LV2_Handle, c_uint32, POINTER(None))),
+    ("connect_port", CFUNCTYPE(None, LV2_Handle, c_uint32, c_void_p)),
     ("activate", CFUNCTYPE(None, LV2_Handle)),
     ("run", CFUNCTYPE(None, LV2_Handle, c_uint32)),
     ("deactivate", CFUNCTYPE(None, LV2_Handle)),
@@ -121,7 +121,7 @@ class Plugin(Structure):
 
     def __init__(self, world, plugin):
         assert isinstance(world, World)
-        assert isinstance(plugin, POINTER(Plugin))
+        assert isinstance(plugin, plugin_p)
         assert plugin
 
         self.world = world
@@ -430,7 +430,7 @@ class PluginClass(Structure):
 
     def __init__(self, world, plugin_class):
         assert isinstance(world, World)
-        assert isinstance(plugin_class, POINTER(PluginClass))
+        assert isinstance(plugin_class, plugin_class_p)
         assert plugin_class
 
         self.world = world
@@ -482,7 +482,7 @@ class Port(Structure):
 
     def __init__(self, plugin, port):
         assert isinstance(plugin, Plugin)
-        assert isinstance(port, POINTER(Port))
+        assert isinstance(port, port_p)
         assert port
 
         self.plugin = plugin
@@ -598,9 +598,9 @@ class Port(Structure):
     def get_range(self):
         """Return the default, minimum, and maximum values of a port as a tuple.
         """
-        pdef = POINTER(Node)()
-        pmin = POINTER(Node)()
-        pmax = POINTER(Node)()
+        pdef = node_p()
+        pmin = node_p()
+        pmax = node_p()
         c.port_get_range(
             self.plugin.plugin,
             self.port,
@@ -639,7 +639,7 @@ class ScalePoint(Structure):
 
     def __init__(self, world, point):
         assert isinstance(world, World)
-        assert isinstance(point, POINTER(ScalePoint))
+        assert isinstance(point, scale_point_p)
         assert point
 
         self.label = Node.wrap(
@@ -663,7 +663,7 @@ class UI(Structure):
 
     def __init__(self, world, ui):
         assert isinstance(world, World)
-        assert isinstance(ui, POINTER(UI))
+        assert isinstance(ui, ui_p)
         assert ui
         self.world = world
         self.ui = ui
@@ -723,14 +723,15 @@ class Node(Structure):
     @classmethod
     def wrap(cls, world, node):
         assert isinstance(world, World)
-        assert node is None or isinstance(node, POINTER(Node))
+        assert node is None or isinstance(node, node_p)
         if node:
             return Node(world, node)
 
         return None
 
     def __init__(self, world, node):
-        assert isinstance(node, POINTER(Node))
+        assert isinstance(world, World)
+        assert isinstance(node, node_p)
         assert node
         self.world = world
         self.node = node
@@ -931,7 +932,8 @@ class Plugins(Collection):
     """Collection of plugins."""
 
     def __init__(self, world, collection):
-        assert isinstance(collection, POINTER(Plugins))
+        assert isinstance(world, World)
+        assert isinstance(collection, plugins_p)
         assert collection
 
         def constructor(world, plugin):
@@ -958,10 +960,6 @@ class Plugins(Collection):
         if isinstance(key, int):
             return super(Plugins, self).__getitem__(key)
 
-        if not isinstance(key, Node):
-            raise TypeError(
-                "Key must be of type int or Node, not '%s'." % type(key))
-
         plugin = self.get_by_uri(key)
         if plugin is None:
             raise KeyError("Plugin not found: " + str(key))
@@ -969,8 +967,12 @@ class Plugins(Collection):
         return plugin
 
     def get_by_uri(self, uri):
-        if type(uri) == str:
+        if isinstance(uri, str):
             uri = self.world.new_uri(uri)
+
+        if not isinstance(uri, Node):
+            raise TypeError(
+                "URI must be of type str or Node, not '%s'." % type(key))
 
         return Plugin.wrap(
             self.world, c.plugins_get_by_uri(self.collection, uri.node)
@@ -981,7 +983,8 @@ class PluginClasses(Collection):
     """Collection of plugin classes."""
 
     def __init__(self, world, collection, owning=False):
-        assert isinstance(collection, POINTER(PluginClasses))
+        assert isinstance(world, World)
+        assert isinstance(collection, plugin_classes_p)
         assert collection
 
         self.owning = owning
@@ -1009,10 +1012,6 @@ class PluginClasses(Collection):
         if isinstance(key, int):
             return super(PluginClasses, self).__getitem__(key)
 
-        if not isinstance(key, Node):
-            raise TypeError(
-                "Key must be of type int or Node, not '%s'." % type(key))
-
         klass = self.get_by_uri(key)
         if klass is None:
             raise KeyError("Plugin class not found: " + str(key))
@@ -1020,8 +1019,12 @@ class PluginClasses(Collection):
         return klass
 
     def get_by_uri(self, uri):
-        if type(uri) == str:
+        if isinstance(uri, str):
             uri = self.world.new_uri(uri)
+
+        if not isinstance(uri, Node):
+            raise TypeError(
+                "URI must be of type str or Node, not '%s'." % type(uri))
 
         plugin_class = c.plugin_classes_get_by_uri(self.collection, uri.node)
         return PluginClass(self.world, plugin_class) if plugin_class else None
@@ -1037,7 +1040,8 @@ class UIs(Collection):
     """Collection of plugin UIs."""
 
     def __init__(self, world, collection):
-        assert isinstance(collection, POINTER(UIs))
+        assert isinstance(world, World)
+        assert isinstance(collection, uis_p)
         assert collection
         super(UIs, self).__init__(
             world,
@@ -1070,7 +1074,7 @@ class UIs(Collection):
         return ui
 
     def get_by_uri(self, uri):
-        if type(uri) == str:
+        if isinstance(uri, str):
             uri = self.world.new_uri(uri)
 
         ui = c.uis_get_by_uri(self.collection, uri.node)
@@ -1083,11 +1087,12 @@ class Nodes(Collection):
     @classmethod
     def constructor(cls, world, node):
         assert isinstance(world, World)
-        assert type(node) == POINTER(Node)
+        assert isinstance(node, node_p)
         return Node.wrap(world, c.node_duplicate(node))
 
     def __init__(self, world, collection, owning=False):
-        assert isinstance(collection, POINTER(Nodes))
+        assert isinstance(world, World)
+        assert isinstance(collection, nodes_p)
 
         self.owning = owning
         super(Nodes, self).__init__(
@@ -1412,7 +1417,7 @@ class Instance(Structure):
     _fields_ = [
         ("lv2_descriptor", POINTER(LV2_Descriptor)),
         ("lv2_handle", LV2_Handle),
-        ("pimpl", POINTER(None)),
+        ("pimpl", c_void_p),
     ]
 
     def __init__(self, plugin, rate, features=None):
@@ -1552,231 +1557,253 @@ def _cfunc(name, restype, *argtypes):
     setattr(c, name, f)
 
 
+_cfunc("free", None, c_void_p)
+
+# Pointer types
+
 def P(x):
     """Shorthand for ctypes.POINTER"""
     return POINTER(x)
 
 
-_cfunc("free", None, c_void_p)
+feature_p_p = P(P(LV2_Feature))
+instance_p = P(Instance)
+iter_p = P(Iter)
+node_p = P(Node)
+node_p_p = P(node_p)
+nodes_p = P(Nodes)
+plugin_p = P(Plugin)
+plugins_p = P(Plugins)
+plugin_class_p = P(PluginClass)
+plugin_classes_p = P(PluginClasses)
+port_p = P(Port)
+scale_point_p = P(ScalePoint)
+scale_points_p = P(ScalePoints)
+state_p = P(State)
+ui_p = P(UI)
+uis_p = P(UIs)
+urid_map_p = P(LV2_URID_Map)
+urid_unmap_p = P(LV2_URID_Unmap)
+world_p = P(World)
 
 # Node
 
 _cfunc("file_uri_parse", c_char_p, String, P(c_char_p))
-_cfunc("new_uri", P(Node), P(World), String)
-_cfunc("new_file_uri", P(Node), P(World), c_char_p, String)
-_cfunc("new_string", P(Node), P(World), String)
-_cfunc("new_int", P(Node), P(World), c_int)
-_cfunc("new_float", P(Node), P(World), c_float)
-_cfunc("new_bool", P(Node), P(World), c_bool)
-_cfunc("node_free", None, P(Node))
-_cfunc("node_duplicate", P(Node), P(Node))
-_cfunc("node_equals", c_bool, P(Node), P(Node))
-_cfunc("node_get_turtle_token", P(c_char), P(Node))
-_cfunc("node_is_uri", c_bool, P(Node))
-_cfunc("node_as_uri", c_char_p, P(Node))
-_cfunc("node_is_blank", c_bool, P(Node))
-_cfunc("node_as_blank", c_char_p, P(Node))
-_cfunc("node_is_literal", c_bool, P(Node))
-_cfunc("node_is_string", c_bool, P(Node))
-_cfunc("node_as_string", c_char_p, P(Node))
-_cfunc("node_get_path", P(c_char), P(Node), P(P(c_char)))
-_cfunc("node_is_float", c_bool, P(Node))
-_cfunc("node_as_float", c_float, P(Node))
-_cfunc("node_is_int", c_bool, P(Node))
-_cfunc("node_as_int", c_int, P(Node))
-_cfunc("node_is_bool", c_bool, P(Node))
-_cfunc("node_as_bool", c_bool, P(Node))
+_cfunc("new_uri", node_p, world_p, String)
+_cfunc("new_file_uri", node_p, world_p, c_char_p, String)
+_cfunc("new_string", node_p, world_p, String)
+_cfunc("new_int", node_p, world_p, c_int)
+_cfunc("new_float", node_p, world_p, c_float)
+_cfunc("new_bool", node_p, world_p, c_bool)
+_cfunc("node_free", None, node_p)
+_cfunc("node_duplicate", node_p, node_p)
+_cfunc("node_equals", c_bool, node_p, node_p)
+_cfunc("node_get_turtle_token", P(c_char), node_p)
+_cfunc("node_is_uri", c_bool, node_p)
+_cfunc("node_as_uri", c_char_p, node_p)
+_cfunc("node_is_blank", c_bool, node_p)
+_cfunc("node_as_blank", c_char_p, node_p)
+_cfunc("node_is_literal", c_bool, node_p)
+_cfunc("node_is_string", c_bool, node_p)
+_cfunc("node_as_string", c_char_p, node_p)
+_cfunc("node_get_path", P(c_char), node_p, P(P(c_char)))
+_cfunc("node_is_float", c_bool, node_p)
+_cfunc("node_as_float", c_float, node_p)
+_cfunc("node_is_int", c_bool, node_p)
+_cfunc("node_as_int", c_int, node_p)
+_cfunc("node_is_bool", c_bool, node_p)
+_cfunc("node_as_bool", c_bool, node_p)
 
 # Collections
 
-_cfunc("plugin_classes_free", None, P(PluginClasses))
-_cfunc("plugin_classes_size", c_uint, P(PluginClasses))
-_cfunc("plugin_classes_begin", P(Iter), P(PluginClasses))
-_cfunc("plugin_classes_get", P(PluginClass), P(PluginClasses), P(Iter))
-_cfunc("plugin_classes_next", P(Iter), P(PluginClasses), P(Iter))
-_cfunc("plugin_classes_is_end", c_bool, P(PluginClasses), P(Iter))
-_cfunc("plugin_classes_get_by_uri", P(PluginClass), P(PluginClasses), P(Node))
-_cfunc("scale_points_free", None, P(ScalePoints))
-_cfunc("scale_points_size", c_uint, P(ScalePoints))
-_cfunc("scale_points_begin", P(Iter), P(ScalePoints))
-_cfunc("scale_points_get", P(ScalePoint), P(ScalePoints), P(Iter))
-_cfunc("scale_points_next", P(Iter), P(ScalePoints), P(Iter))
-_cfunc("scale_points_is_end", c_bool, P(ScalePoints), P(Iter))
-_cfunc("uis_free", None, P(UIs))
-_cfunc("uis_size", c_uint, P(UIs))
-_cfunc("uis_begin", P(Iter), P(UIs))
-_cfunc("uis_get", P(UI), P(UIs), P(Iter))
-_cfunc("uis_next", P(Iter), P(UIs), P(Iter))
-_cfunc("uis_is_end", c_bool, P(UIs), P(Iter))
-_cfunc("uis_get_by_uri", P(UI), P(UIs), P(Node))
-_cfunc("nodes_free", None, P(Nodes))
-_cfunc("nodes_size", c_uint, P(Nodes))
-_cfunc("nodes_begin", P(Iter), P(Nodes))
-_cfunc("nodes_get", P(Node), P(Nodes), P(Iter))
-_cfunc("nodes_next", P(Iter), P(Nodes), P(Iter))
-_cfunc("nodes_is_end", c_bool, P(Nodes), P(Iter))
-_cfunc("nodes_get_first", P(Node), P(Nodes))
-_cfunc("nodes_contains", c_bool, P(Nodes), P(Node))
-_cfunc("nodes_merge", P(Nodes), P(Nodes), P(Nodes))
-_cfunc("plugins_size", c_uint, P(Plugins))
-_cfunc("plugins_begin", P(Iter), P(Plugins))
-_cfunc("plugins_get", P(Plugin), P(Plugins), P(Iter))
-_cfunc("plugins_next", P(Iter), P(Plugins), P(Iter))
-_cfunc("plugins_is_end", c_bool, P(Plugins), P(Iter))
-_cfunc("plugins_get_by_uri", P(Plugin), P(Plugins), P(Node))
+_cfunc("plugin_classes_free", None, plugin_classes_p)
+_cfunc("plugin_classes_size", c_uint, plugin_classes_p)
+_cfunc("plugin_classes_begin", iter_p, plugin_classes_p)
+_cfunc("plugin_classes_get", plugin_class_p, plugin_classes_p, iter_p)
+_cfunc("plugin_classes_next", iter_p, plugin_classes_p, iter_p)
+_cfunc("plugin_classes_is_end", c_bool, plugin_classes_p, iter_p)
+_cfunc("plugin_classes_get_by_uri", plugin_class_p, plugin_classes_p, node_p)
+_cfunc("scale_points_free", None, scale_points_p)
+_cfunc("scale_points_size", c_uint, scale_points_p)
+_cfunc("scale_points_begin", iter_p, scale_points_p)
+_cfunc("scale_points_get", scale_point_p, scale_points_p, iter_p)
+_cfunc("scale_points_next", iter_p, scale_points_p, iter_p)
+_cfunc("scale_points_is_end", c_bool, scale_points_p, iter_p)
+_cfunc("uis_free", None, uis_p)
+_cfunc("uis_size", c_uint, uis_p)
+_cfunc("uis_begin", iter_p, uis_p)
+_cfunc("uis_get", ui_p, uis_p, iter_p)
+_cfunc("uis_next", iter_p, uis_p, iter_p)
+_cfunc("uis_is_end", c_bool, uis_p, iter_p)
+_cfunc("uis_get_by_uri", ui_p, uis_p, node_p)
+_cfunc("nodes_free", None, nodes_p)
+_cfunc("nodes_size", c_uint, nodes_p)
+_cfunc("nodes_begin", iter_p, nodes_p)
+_cfunc("nodes_get", node_p, nodes_p, iter_p)
+_cfunc("nodes_next", iter_p, nodes_p, iter_p)
+_cfunc("nodes_is_end", c_bool, nodes_p, iter_p)
+_cfunc("nodes_get_first", node_p, nodes_p)
+_cfunc("nodes_contains", c_bool, nodes_p, node_p)
+_cfunc("nodes_merge", nodes_p, nodes_p, nodes_p)
+_cfunc("plugins_size", c_uint, plugins_p)
+_cfunc("plugins_begin", iter_p, plugins_p)
+_cfunc("plugins_get", plugin_p, plugins_p, iter_p)
+_cfunc("plugins_next", iter_p, plugins_p, iter_p)
+_cfunc("plugins_is_end", c_bool, plugins_p, iter_p)
+_cfunc("plugins_get_by_uri", plugin_p, plugins_p, node_p)
 
 # World
 
-_cfunc("world_new", P(World))
-_cfunc("world_set_option", None, P(World), String, P(Node))
-_cfunc("world_free", None, P(World))
-_cfunc("world_load_all", None, P(World))
-_cfunc("world_load_bundle", None, P(World), P(Node))
-_cfunc("world_load_specifications", None, P(World))
-_cfunc("world_load_plugin_classes", None, P(World))
-_cfunc("world_unload_bundle", c_int, P(World), P(Node))
-_cfunc("world_load_resource", c_int, P(World), P(Node))
-_cfunc("world_unload_resource", c_int, P(World), P(Node))
-_cfunc("world_get_plugin_class", P(PluginClass), P(World))
-_cfunc("world_get_plugin_classes", P(PluginClasses), P(World))
-_cfunc("world_get_all_plugins", P(Plugins), P(World))
-_cfunc("world_find_nodes", P(Nodes), P(World), P(Node), P(Node), P(Node))
-_cfunc("world_get", P(Node), P(World), P(Node), P(Node), P(Node))
-_cfunc("world_ask", c_bool, P(World), P(Node), P(Node), P(Node))
-_cfunc("world_get_symbol", P(Node), P(World), P(Node))
+_cfunc("world_new", world_p)
+_cfunc("world_set_option", None, world_p, String, node_p)
+_cfunc("world_free", None, world_p)
+_cfunc("world_load_all", None, world_p)
+_cfunc("world_load_bundle", None, world_p, node_p)
+_cfunc("world_load_specifications", None, world_p)
+_cfunc("world_load_plugin_classes", None, world_p)
+_cfunc("world_unload_bundle", c_int, world_p, node_p)
+_cfunc("world_load_resource", c_int, world_p, node_p)
+_cfunc("world_unload_resource", c_int, world_p, node_p)
+_cfunc("world_get_plugin_class", plugin_class_p, world_p)
+_cfunc("world_get_plugin_classes", plugin_classes_p, world_p)
+_cfunc("world_get_all_plugins", plugins_p, world_p)
+_cfunc("world_find_nodes", nodes_p, world_p, node_p, node_p, node_p)
+_cfunc("world_get", node_p, world_p, node_p, node_p, node_p)
+_cfunc("world_ask", c_bool, world_p, node_p, node_p, node_p)
+_cfunc("world_get_symbol", node_p, world_p, node_p)
 
 # Plugin
 
-_cfunc("plugin_verify", c_bool, P(Plugin))
-_cfunc("plugin_get_uri", P(Node), P(Plugin))
-_cfunc("plugin_get_bundle_uri", P(Node), P(Plugin))
-_cfunc("plugin_get_data_uris", P(Nodes), P(Plugin))
-_cfunc("plugin_get_library_uri", P(Node), P(Plugin))
-_cfunc("plugin_get_name", P(Node), P(Plugin))
-_cfunc("plugin_get_class", P(PluginClass), P(Plugin))
-_cfunc("plugin_get_value", P(Nodes), P(Plugin), P(Node))
-_cfunc("plugin_has_feature", c_bool, P(Plugin), P(Node))
-_cfunc("plugin_get_supported_features", P(Nodes), P(Plugin))
-_cfunc("plugin_get_required_features", P(Nodes), P(Plugin))
-_cfunc("plugin_get_optional_features", P(Nodes), P(Plugin))
-_cfunc("plugin_has_extension_data", c_bool, P(Plugin), P(Node))
-_cfunc("plugin_get_extension_data", P(Nodes), P(Plugin))
-_cfunc("plugin_get_num_ports", c_uint32, P(Plugin))
+_cfunc("plugin_verify", c_bool, plugin_p)
+_cfunc("plugin_get_uri", node_p, plugin_p)
+_cfunc("plugin_get_bundle_uri", node_p, plugin_p)
+_cfunc("plugin_get_data_uris", nodes_p, plugin_p)
+_cfunc("plugin_get_library_uri", node_p, plugin_p)
+_cfunc("plugin_get_name", node_p, plugin_p)
+_cfunc("plugin_get_class", plugin_class_p, plugin_p)
+_cfunc("plugin_get_value", nodes_p, plugin_p, node_p)
+_cfunc("plugin_has_feature", c_bool, plugin_p, node_p)
+_cfunc("plugin_get_supported_features", nodes_p, plugin_p)
+_cfunc("plugin_get_required_features", nodes_p, plugin_p)
+_cfunc("plugin_get_optional_features", nodes_p, plugin_p)
+_cfunc("plugin_has_extension_data", c_bool, plugin_p, node_p)
+_cfunc("plugin_get_extension_data", nodes_p, plugin_p)
+_cfunc("plugin_get_num_ports", c_uint32, plugin_p)
 
 c.plugin_get_num_ports_of_class = VariadicFunction(
-    c.lib.lilv_plugin_get_num_ports_of_class, c_uint32, [P(Plugin), P(Node)]
+    c.lib.lilv_plugin_get_num_ports_of_class, c_uint32, [plugin_p, node_p]
 )
 
-_cfunc("plugin_has_latency", c_bool, P(Plugin))
-_cfunc("plugin_get_latency_port_index", c_uint32, P(Plugin))
-_cfunc("plugin_get_port_by_index", P(Port), P(Plugin), c_uint32)
-_cfunc("plugin_get_port_by_symbol", P(Port), P(Plugin), P(Node))
-_cfunc("plugin_get_port_by_designation", P(Port), P(Plugin), P(Node), P(Node))
-_cfunc("plugin_get_project", P(Node), P(Plugin))
-_cfunc("plugin_get_author_name", P(Node), P(Plugin))
-_cfunc("plugin_get_author_email", P(Node), P(Plugin))
-_cfunc("plugin_get_author_homepage", P(Node), P(Plugin))
-_cfunc("plugin_is_replaced", c_bool, P(Plugin))
-_cfunc("plugin_get_related", P(Nodes), P(Plugin), P(Node))
+_cfunc("plugin_has_latency", c_bool, plugin_p)
+_cfunc("plugin_get_latency_port_index", c_uint32, plugin_p)
+_cfunc("plugin_get_port_by_index", port_p, plugin_p, c_uint32)
+_cfunc("plugin_get_port_by_symbol", port_p, plugin_p, node_p)
+_cfunc("plugin_get_port_by_designation", port_p, plugin_p, node_p, node_p)
+_cfunc("plugin_get_project", node_p, plugin_p)
+_cfunc("plugin_get_author_name", node_p, plugin_p)
+_cfunc("plugin_get_author_email", node_p, plugin_p)
+_cfunc("plugin_get_author_homepage", node_p, plugin_p)
+_cfunc("plugin_is_replaced", c_bool, plugin_p)
+_cfunc("plugin_get_related", nodes_p, plugin_p, node_p)
 
 # Port
 
-_cfunc("port_get_node", P(Node), P(Plugin), P(Port))
-_cfunc("port_get_value", P(Nodes), P(Plugin), P(Port), P(Node))
-_cfunc("port_get", P(Node), P(Plugin), P(Port), P(Node))
-_cfunc("port_get_properties", P(Nodes), P(Plugin), P(Port))
-_cfunc("port_has_property", c_bool, P(Plugin), P(Port), P(Node))
-_cfunc("port_supports_event", c_bool, P(Plugin), P(Port), P(Node))
-_cfunc("port_get_index", c_uint32, P(Plugin), P(Port))
-_cfunc("port_get_symbol", P(Node), P(Plugin), P(Port))
-_cfunc("port_get_name", P(Node), P(Plugin), P(Port))
-_cfunc("port_get_classes", P(Nodes), P(Plugin), P(Port))
-_cfunc("port_is_a", c_bool, P(Plugin), P(Port), P(Node))
+_cfunc("port_get_node", node_p, plugin_p, port_p)
+_cfunc("port_get_value", nodes_p, plugin_p, port_p, node_p)
+_cfunc("port_get", node_p, plugin_p, port_p, node_p)
+_cfunc("port_get_properties", nodes_p, plugin_p, port_p)
+_cfunc("port_has_property", c_bool, plugin_p, port_p, node_p)
+_cfunc("port_supports_event", c_bool, plugin_p, port_p, node_p)
+_cfunc("port_get_index", c_uint32, plugin_p, port_p)
+_cfunc("port_get_symbol", node_p, plugin_p, port_p)
+_cfunc("port_get_name", node_p, plugin_p, port_p)
+_cfunc("port_get_classes", nodes_p, plugin_p, port_p)
+_cfunc("port_is_a", c_bool, plugin_p, port_p, node_p)
 
 _cfunc(
     "port_get_range",
     None,
-    P(Plugin),
-    P(Port),
-    P(P(Node)),
-    P(P(Node)),
-    P(P(Node)),
+    plugin_p,
+    port_p,
+    node_p_p,
+    node_p_p,
+    node_p_p,
 )
 
-_cfunc("port_get_scale_points", P(ScalePoints), P(Plugin), P(Port))
+_cfunc("port_get_scale_points", scale_points_p, plugin_p, port_p)
 
 # Plugin State
 
-_cfunc("state_new_from_world", P(State), P(World), P(LV2_URID_Map), P(Node))
+_cfunc("state_new_from_world", state_p, world_p, urid_map_p, node_p)
 
 _cfunc(
-    "state_new_from_file", P(State), P(World), P(LV2_URID_Map), P(Node), String
+    "state_new_from_file", state_p, world_p, urid_map_p, node_p, String
 )
 
-_cfunc("state_new_from_string", P(State), P(World), P(LV2_URID_Map), String)
+_cfunc("state_new_from_string", state_p, world_p, urid_map_p, String)
 
 LilvGetPortValueFunc = CFUNCTYPE(
-    c_void_p, c_char_p, P(None), P(c_uint32), P(c_uint32)
+    c_void_p, c_char_p, c_void_p, P(c_uint32), P(c_uint32)
 )
 
 _cfunc(
     "state_new_from_instance",
-    P(State),
-    P(Plugin),
-    P(Instance),
-    P(LV2_URID_Map),
+    state_p,
+    plugin_p,
+    instance_p,
+    urid_map_p,
     c_char_p,
     c_char_p,
     c_char_p,
     String,
     LilvGetPortValueFunc,
-    P(None),
+    c_void_p,
     c_uint32,
-    P(P(LV2_Feature)),
+    feature_p_p,
 )
 
-_cfunc("state_free", None, P(State))
-_cfunc("state_equals", c_bool, P(State), P(State))
-_cfunc("state_get_num_properties", c_uint, P(State))
-_cfunc("state_get_plugin_uri", P(Node), P(State))
-_cfunc("state_get_uri", P(Node), P(State))
-_cfunc("state_get_label", c_char_p, P(State))
-_cfunc("state_set_label", None, P(State), String)
+_cfunc("state_free", None, state_p)
+_cfunc("state_equals", c_bool, state_p, state_p)
+_cfunc("state_get_num_properties", c_uint, state_p)
+_cfunc("state_get_plugin_uri", node_p, state_p)
+_cfunc("state_get_uri", node_p, state_p)
+_cfunc("state_get_label", c_char_p, state_p)
+_cfunc("state_set_label", None, state_p, String)
 
 _cfunc(
     "state_set_metadata",
     c_int,
-    P(State),
+    state_p,
     c_uint32,
-    P(None),
+    c_void_p,
     c_size_t,
     c_uint32,
     c_uint32,
 )
 
 LilvSetPortValueFunc = CFUNCTYPE(
-    None, c_char_p, P(None), P(None), c_uint32, c_uint32
+    None, c_char_p, c_void_p, c_void_p, c_uint32, c_uint32
 )
-_cfunc("state_emit_port_values", None, P(State), LilvSetPortValueFunc, P(None))
+_cfunc("state_emit_port_values", None, state_p, LilvSetPortValueFunc, c_void_p)
 
 _cfunc(
     "state_restore",
     None,
-    P(State),
-    P(Instance),
+    state_p,
+    instance_p,
     LilvSetPortValueFunc,
-    P(None),
+    c_void_p,
     c_uint32,
-    P(P(LV2_Feature)),
+    feature_p_p,
 )
 
 _cfunc(
     "state_save",
     c_int,
-    P(World),
-    P(LV2_URID_Map),
-    P(LV2_URID_Unmap),
-    P(State),
+    world_p,
+    urid_map_p,
+    urid_unmap_p,
+    state_p,
     c_char_p,
     c_char_p,
     String,
@@ -1785,51 +1812,51 @@ _cfunc(
 _cfunc(
     "state_to_string",
     c_char_p,
-    P(World),
-    P(LV2_URID_Map),
-    P(LV2_URID_Unmap),
-    P(State),
+    world_p,
+    urid_map_p,
+    urid_unmap_p,
+    state_p,
     c_char_p,
     String,
 )
 
-_cfunc("state_delete", c_int, P(World), P(State))
+_cfunc("state_delete", c_int, world_p, state_p)
 
 # Scale Point
 
-_cfunc("scale_point_get_label", P(Node), P(ScalePoint))
-_cfunc("scale_point_get_value", P(Node), P(ScalePoint))
+_cfunc("scale_point_get_label", node_p, scale_point_p)
+_cfunc("scale_point_get_value", node_p, scale_point_p)
 
 # Plugin Class
 
-_cfunc("plugin_class_get_parent_uri", P(Node), P(PluginClass))
-_cfunc("plugin_class_get_uri", P(Node), P(PluginClass))
-_cfunc("plugin_class_get_label", P(Node), P(PluginClass))
-_cfunc("plugin_class_get_children", P(PluginClasses), P(PluginClass))
+_cfunc("plugin_class_get_parent_uri", node_p, plugin_class_p)
+_cfunc("plugin_class_get_uri", node_p, plugin_class_p)
+_cfunc("plugin_class_get_label", node_p, plugin_class_p)
+_cfunc("plugin_class_get_children", plugin_classes_p, plugin_class_p)
 
 # Plugin Instance
 
 _cfunc(
-    "plugin_instantiate", P(Instance), P(Plugin), c_double, P(P(LV2_Feature))
+    "plugin_instantiate", instance_p, plugin_p, c_double, feature_p_p
 )
 
-_cfunc("instance_free", None, P(Instance))
-_cfunc("plugin_get_uis", P(UIs), P(Plugin))
+_cfunc("instance_free", None, instance_p)
+_cfunc("plugin_get_uis", uis_p, plugin_p)
 
 # Plugin UI
 
-_cfunc("ui_get_uri", P(Node), P(UI))
-_cfunc("ui_get_classes", P(Nodes), P(UI))
-_cfunc("ui_is_a", c_bool, P(UI), P(Node))
+_cfunc("ui_get_uri", node_p, ui_p)
+_cfunc("ui_get_classes", nodes_p, ui_p)
+_cfunc("ui_is_a", c_bool, ui_p, node_p)
 
 LilvUISupportedFunc = CFUNCTYPE(c_uint, c_char_p, c_char_p)
 
 _cfunc(
-    "ui_is_supported", c_uint, P(UI), LilvUISupportedFunc, P(Node), P(P(Node))
+    "ui_is_supported", c_uint, ui_p, LilvUISupportedFunc, node_p, node_p_p
 )
 
-_cfunc("ui_get_bundle_uri", P(Node), P(UI))
-_cfunc("ui_get_binary_uri", P(Node), P(UI))
+_cfunc("ui_get_bundle_uri", node_p, ui_p)
+_cfunc("ui_get_binary_uri", node_p, ui_p)
 
 # Define URI constants for compatibility with old Python bindings
 
